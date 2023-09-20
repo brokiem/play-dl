@@ -1,6 +1,7 @@
 import { IncomingMessage } from 'node:http';
 import { request_stream } from '../../Request';
 import { parseAudioFormats, StreamOptions, StreamType } from '../stream';
+import { FormatData } from '../utils/constants';
 import { video_stream_info } from '../utils/extractor';
 import { Timer } from './LiveStream';
 import { WebmSeeker, WebmSeekerState } from './WebmSeeker';
@@ -17,6 +18,10 @@ export class SeekStream {
      * Type of audio data that we recieved from normal youtube url.
      */
     type: StreamType;
+    /**
+     * Information about the stream's format, potentially including loudness.
+     */
+    format: FormatData;
     /**
      * Audio Endpoint Format Url to get data from.
      */
@@ -68,7 +73,7 @@ export class SeekStream {
      * @param options Options provided to stream function.
      */
     constructor(
-        url: string,
+        format: FormatData,
         duration: number,
         headerLength: number,
         contentLength: number,
@@ -80,7 +85,8 @@ export class SeekStream {
             highWaterMark: 5 * 1000 * 1000,
             readableObjectMode: true
         });
-        this.url = url;
+        this.format = format;
+        this.url = format.url;
         this.quality = options.quality as number;
         this.type = StreamType.Opus;
         this.bytes_count = 0;
@@ -169,8 +175,8 @@ export class SeekStream {
      */
     private async retry() {
         const info = await video_stream_info(this.video_url);
-        const audioFormat = parseAudioFormats(info.format);
-        this.url = audioFormat[this.quality].url;
+        this.format = parseAudioFormats(info.format)[this.quality];
+        this.url = this.format.url;
     }
     /**
      * This cleans every used variable in class.

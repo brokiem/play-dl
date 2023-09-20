@@ -4,6 +4,7 @@ import { parseAudioFormats, StreamOptions, StreamType } from '../stream';
 import { request, request_stream } from '../../Request';
 import { video_stream_info } from '../utils/extractor';
 import { URL } from 'node:url';
+import { FormatData } from '../utils/constants';
 
 /**
  * YouTube Live Stream class for playing audio from Live Stream videos.
@@ -17,6 +18,10 @@ export class LiveStream {
      * Type of audio data that we recieved from live stream youtube url.
      */
     type: StreamType;
+    /**
+     * Information about the stream's format, potentially including loudness.
+     */
+    format: FormatData;
     /**
      * Incoming message that we recieve.
      *
@@ -66,13 +71,14 @@ export class LiveStream {
      * @param target_interval interval time for fetching dash data again
      * @param video_url Live Stream video url.
      */
-    constructor(dash_url: string, interval: number, video_url: string, precache?: number) {
+    constructor(format: FormatData, dash_url: string, video_url: string, precache?: number) {
+        this.format = format;
         this.stream = new Readable({ highWaterMark: 5 * 1000 * 1000, read() {} });
         this.type = StreamType.Arbitrary;
         this.sequence = 0;
         this.dash_url = dash_url;
         this.base_url = '';
-        this.interval = interval;
+        this.interval = format.targetDurationSec;
         this.video_url = video_url;
         this.precache = precache || 3;
         this.dash_timer = new Timer(() => {
@@ -208,9 +214,13 @@ export class Stream {
      */
     stream: Readable;
     /**
-     * Type of audio data that we recieved from normal youtube url.
+     * Type of audio data that we received from normal youtube url.
      */
     type: StreamType;
+    /**
+     * Information about the stream's format, potentially including loudness.
+     */
+    format: FormatData;
     /**
      * Audio Endpoint Format Url to get data from.
      */
@@ -256,17 +266,18 @@ export class Stream {
      * @param options Options provided to stream function.
      */
     constructor(
-        url: string,
+        format: FormatData,
         type: StreamType,
         duration: number,
         contentLength: number,
         video_url: string,
         options: StreamOptions
     ) {
-        this.stream = new Readable({ highWaterMark: 5 * 1000 * 1000, read() {} });
-        this.url = url;
-        this.quality = options.quality as number;
+        this.format = format;
         this.type = type;
+        this.stream = new Readable({ highWaterMark: 5 * 1000 * 1000, read() {} });
+        this.url = format.url;
+        this.quality = options.quality as number;
         this.bytes_count = 0;
         this.video_url = video_url;
         this.per_sec_bytes = Math.ceil(contentLength / duration);
@@ -287,8 +298,8 @@ export class Stream {
      */
     private async retry() {
         const info = await video_stream_info(this.video_url);
-        const audioFormat = parseAudioFormats(info.format);
-        this.url = audioFormat[this.quality].url;
+        this.format = parseAudioFormats(info.format)[this.quality];
+        this.url = this.format.url;
     }
     /**
      * This cleans every used variable in class.

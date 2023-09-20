@@ -1,7 +1,7 @@
 import { request_content_length, request_stream } from '../Request';
 import { LiveStream, Stream } from './classes/LiveStream';
 import { SeekStream } from './classes/SeekStream';
-import { InfoData, StreamInfoData } from './utils/constants';
+import { FormatData, InfoData, StreamInfoData } from './utils/constants';
 import { video_stream_info } from './utils/extractor';
 import { URL } from 'node:url';
 
@@ -22,22 +22,26 @@ export interface StreamOptions {
     discordPlayerCompatibility?: boolean;
 }
 
+interface AudioFormat extends FormatData {
+    codec: string;
+    container: string;
+}
+
 /**
  * Command to find audio formats from given format array
  * @param formats Formats to search from
  * @returns Audio Formats array
  */
-export function parseAudioFormats(formats: any[]) {
-    const result: any[] = [];
-    formats.forEach((format) => {
-        const type = format.mimeType as string;
-        if (type.startsWith('audio')) {
-            format.codec = type.split('codecs="')[1].split('"')[0];
-            format.container = type.split('audio/')[1].split(';')[0];
-            result.push(format);
-        }
+export function parseAudioFormats(formats: FormatData[]): AudioFormat[] {
+    return formats.flatMap((format) => {
+        const type = format.mimeType;
+        if (!type.startsWith('audio')) return [];
+        return [{
+            codec: type.split('codecs="')[1].split('"')[0],
+            container: type.split('audio/')[1].split(';')[0],
+            ...format,
+        }];
     });
-    return result;
 }
 /**
  * Type for YouTube Stream
@@ -68,15 +72,14 @@ export async function stream_from_info(
     if (options.quality && !Number.isInteger(options.quality))
         throw new Error("Quality must be set to an integer.")
 
-    const final: any[] = [];
     if (
         info.LiveStreamData.isLive === true &&
         info.LiveStreamData.dashManifestUrl !== null &&
         info.video_details.durationInSec === 0
     ) {
         return new LiveStream(
+            info.format[info.format.length - 1],
             info.LiveStreamData.dashManifestUrl,
-            info.format[info.format.length - 1].targetDurationSec as number,
             info.video_details.url,
             options.precache
         );
@@ -86,22 +89,21 @@ export async function stream_from_info(
     if (typeof options.quality !== 'number') options.quality = audioFormat.length - 1;
     else if (options.quality <= 0) options.quality = 0;
     else if (options.quality >= audioFormat.length) options.quality = audioFormat.length - 1;
-    if (audioFormat.length !== 0) final.push(audioFormat[options.quality]);
-    else final.push(info.format[info.format.length - 1]);
+    const final: FormatData & Partial<AudioFormat> = audioFormat.length !== 0 ? audioFormat[options.quality] : info.format[info.format.length - 1];
     let type: StreamType =
-        final[0].codec === 'opus' && final[0].container === 'webm' ? StreamType.WebmOpus : StreamType.Arbitrary;
-    await request_stream(`https://${new URL(final[0].url).host}/generate_204`);
+        final.codec === 'opus' && final.container === 'webm' ? StreamType.WebmOpus : StreamType.Arbitrary;
+    await request_stream(`https://${new URL(final.url).host}/generate_204`);
     if (type === StreamType.WebmOpus) {
         if (!options.discordPlayerCompatibility) {
             options.seek ??= 0;
             if (options.seek >= info.video_details.durationInSec || options.seek < 0)
                 throw new Error(`Seeking beyond limit. [ 0 - ${info.video_details.durationInSec - 1}]`);
             return new SeekStream(
-                final[0].url,
+                final,
                 info.video_details.durationInSec,
-                final[0].indexRange.end,
-                Number(final[0].contentLength),
-                Number(final[0].bitrate),
+                Number(final.indexRange.end),
+                Number(final.contentLength),
+                Number(final.bitrate),
                 info.video_details.url,
                 options
             );
@@ -109,14 +111,14 @@ export async function stream_from_info(
     }
 
     let contentLength;
-    if (final[0].contentLength) {
-        contentLength = Number(final[0].contentLength);
+    if (final.contentLength) {
+        contentLength = Number(final.contentLength);
     } else {
-        contentLength = await request_content_length(final[0].url);
+        contentLength = await request_content_length(final.url);
     }
 
     return new Stream(
-        final[0].url,
+        final,
         type,
         info.video_details.durationInSec,
         contentLength,

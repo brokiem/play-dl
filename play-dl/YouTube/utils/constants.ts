@@ -6,7 +6,7 @@ export interface LiveStreamData {
     hlsManifestUrl: string | null;
 }
 
-export interface formatData {
+export interface FormatData {
     itag: number;
     mimeType: string;
     bitrate: number;
@@ -28,12 +28,13 @@ export interface formatData {
     cipher: string;
     loudnessDb: number;
     targetDurationSec: number;
+    indexRange: { start: string; end: string };
 }
 
 export interface InfoData {
     LiveStreamData: LiveStreamData;
     html5player: string;
-    format: Partial<formatData>[];
+    format: FormatData[];
     video_details: YouTubeVideo;
     related_videos: string[];
 }
@@ -41,6 +42,6 @@ export interface InfoData {
 export interface StreamInfoData {
     LiveStreamData: LiveStreamData;
     html5player: string;
-    format: Partial<formatData>[];
+    format: FormatData[];
     video_details: Pick<YouTubeVideo, 'url' | 'durationInSec'>;
 }

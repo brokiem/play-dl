@@ -153,7 +153,7 @@ function download_url(format: formatOptions, sig: string) {
  * @param html5player url of html5player
  * @returns array of format.
  */
-export async function format_decipher(formats: formatOptions[], html5player: string): Promise<formatOptions[]> {
+export async function format_decipher<T>(formats: (T & formatOptions)[], html5player: string): Promise<T[]> {
     const body = await request(html5player);
     const tokens = js_tokens(body);
     formats.forEach((format) => {
